@@ -14,7 +14,7 @@
 #include "tinyxml/tinyxml.h"
 
 using namespace Module;
-using namespace FileSystem;
+using namespace filesystem;
 
 namespace Framework
 {
@@ -23,7 +23,7 @@ namespace Framework
 	class BundleRegParser : public TiXmlVisitor
 	{
 	public:
-		BundleRegParser(IFile* file);
+		BundleRegParser(const char* file);
 		virtual bool VisitEnter(const TiXmlDocument& doc);
 		virtual bool VisitExit(const TiXmlDocument& doc);
 		virtual bool VisitEnter(const TiXmlElement& element, const TiXmlAttribute* firstAttribute);

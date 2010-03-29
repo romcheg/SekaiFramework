@@ -1,220 +1,230 @@
-#include "module/module.h"
-#include "module/intellectual.h"
-#include "filesystem/FileSystem.h"
-#include "misc.h"
+/*========================================================
+* testmain.cpp
+* @author Sergey Mikhtonyuk
+* @date 20 Mar 2010
+*
+* Copyrights (c) Sergey Mikhtonyuk 2007-2010.
+* Terms of use, copying, distribution, and modification
+* are covered in accompanying LICENSE file
+=========================================================*/
+#include "filesystem/filesystem.h"
 
 #define BOOST_TEST_MODULE FileSystem test
 #include <boost/test/unit_test.hpp>
 #include <iostream>
 
-using namespace FileSystem;
-using namespace Module;
+using namespace filesystem;
 
-ModuleHandle module(SHARED_LIB_NAME("filesystem"));
+BOOST_AUTO_TEST_SUITE( PathTestSuite );
 
-
-BOOST_AUTO_TEST_SUITE( my_suite1 );
-
-
-BOOST_AUTO_TEST_CASE( TestForSingleton )
+BOOST_AUTO_TEST_CASE( TestConstructPath )
 {
-	ModuleHandle m2(SHARED_LIB_NAME("filesystem"));
-
-	com_ptr<IFileSystem> fs1;
-	BOOST_REQUIRE(SF_SUCCEEDED(create_instance(fs1.wrapped(), CLSID_CFileSystem, module)));
-
-	com_ptr<IFileSystem> fs2;
-	BOOST_REQUIRE(SF_SUCCEEDED(create_instance(fs2.wrapped(), CLSID_CFileSystem, module)));
-
-	BOOST_CHECK_EQUAL(fs1, fs2);
+	path p("test_path");
+	BOOST_CHECK_THROW(path p2("te|<>\"?*st"), Module::InvalidArgumentException);
 }
 
-
-BOOST_AUTO_TEST_CASE( TestHandles )
+BOOST_AUTO_TEST_CASE( TestCmp )
 {
-	com_ptr<IFileSystem> fs;
-	BOOST_CHECK(SF_SUCCEEDED(create_instance(fs.wrapped(), CLSID_CFileSystem, module)));
+	path p1("test/");
+	path p2("test");
+	BOOST_CHECK_EQUAL(p1, p2);
 
-	com_ptr<IFile> fh = fs->GetResource("../../test/filesystem.test/testmain.cpp");
-	BOOST_CHECK(fh);
-
-	BOOST_CHECK_NE(fh->FullPath().find("/testmain.cpp"), -1);
-
-	com_ptr<IFolder> fld = fh->Parent();
-	BOOST_CHECK(fld);
-
-	BOOST_CHECK_NE(fld->FullPath().find("/filesystem.test"), -1);
-	BOOST_CHECK_EQUAL(fld->BaseName(), std::string("filesystem.test"));
+#if defined OS_WINDOWS
+	BOOST_CHECK_EQUAL(p1, "TeSt");
+#endif
 }
 
-BOOST_AUTO_TEST_CASE( TestFolderChildren )
+BOOST_AUTO_TEST_CASE( TestJoin )
 {
-	com_ptr<IFileSystem> fs;
-	BOOST_CHECK(SF_SUCCEEDED(create_instance(fs.wrapped(), CLSID_CFileSystem, module)));
+	path p1;
+	p1 += "test";
+	BOOST_CHECK(strcmp(p1.c_str(), "test") == 0);
 
-	com_ptr<IFolder> pFld = fs->GetResource("../../test/filesystem.test");
-	BOOST_CHECK(pFld);
+	path p2;
+	p2 += "/test";
+	BOOST_CHECK(strcmp(p2.c_str(), "/test") == 0);
 
-	const std::vector<IResource*>& children = pFld->GetChildren();
-	com_ptr<IResource> pFound;
-	for(size_t i = 0; i < children.size(); ++i)
-		if(children[i]->FullPath().find("testmain.cpp") != std::string::npos)
-			pFound = children[i];
+	path p3("asdf/");
+	p3 += "test";
+	BOOST_CHECK(strcmp(p3.c_str(), "asdf\\test") == 0);
 
-	BOOST_CHECK(pFound);
+	path p4("asdf/");
+	p4 += "/test/";
+	BOOST_CHECK(strcmp(p4.c_str(), "asdf\\test") == 0);
+
+	path p5;
+	p5 += "/";
+	BOOST_CHECK(strcmp(p5.c_str(), "/") == 0);
 }
 
-
-BOOST_AUTO_TEST_CASE( TestFileReading )
+BOOST_AUTO_TEST_CASE( TestAttrs )
 {
-	com_ptr<IFileSystem> fs;
-	BOOST_CHECK(SF_SUCCEEDED(create_instance(fs.wrapped(), CLSID_CFileSystem, module)));
+	path p1("../../test/filesystem.test/tests");
+	BOOST_CHECK( p1.exists() );
+	BOOST_CHECK( p1.is_directory() );
+	BOOST_CHECK( !p1.is_file() );
 
-	com_ptr<IFolder> pFld1 = fs->GetResource("../../test/filesystem.test/tests");
-	BOOST_CHECK(pFld1);
-
-	com_ptr<IFile> pFile = pFld1->FindChild("testXML.xml");
-	BOOST_CHECK(pFile);
-
-	std::fstream& ifs = pFile->Stream();
-
-	BOOST_CHECK(ifs.is_open());
-
-	char c;
-	while(ifs.get(c));
-
-	ifs.close();
+	path p2 = p1 + "testINI.ini";
+	BOOST_CHECK( p2.exists() );
+	BOOST_CHECK( !p2.is_directory() );
+	BOOST_CHECK( p2.is_file() );
 }
 
-
-BOOST_AUTO_TEST_CASE( TestXMLAdapter )
+BOOST_AUTO_TEST_CASE( TestSlices )
 {
-	com_ptr<IFileSystem> fs;
-	BOOST_CHECK(SF_SUCCEEDED(create_instance(fs.wrapped(), CLSID_CFileSystem, module)));
-
-	com_ptr<IFile> pFile = fs->GetResource("../../test/filesystem.test/tests/testXML.xml");
-	BOOST_CHECK(pFile);
-
-	com_ptr<IXMLFileAdapter> pXMLAdapter;
-	BOOST_CHECK(SF_SUCCEEDED(fs->CreateFileAdapter(pFile, UUID_PPV(IXMLFileAdapter, pXMLAdapter.wrapped()))));
-	BOOST_CHECK(pXMLAdapter);
-
-	BOOST_CHECK_EQUAL(pXMLAdapter->IsInitialized(), false);
-	pXMLAdapter->Parse();
-	BOOST_CHECK_EQUAL(pXMLAdapter->IsInitialized(), true);
-
-	TiXmlDocument& doc = pXMLAdapter->GetDoc();
-
-    CTestVisitor v;
-	doc.Accept(&v);
+	path p("/abc/def/ghi.j");
+	BOOST_CHECK_EQUAL( p.basename(), "ghi.j" );
+	BOOST_CHECK_EQUAL( p.dirname(), "/abc/def" );
+	--p;
+	--p;
+	BOOST_CHECK_EQUAL( p, "/abc" );
+	--p;
+	BOOST_CHECK_EQUAL( p, "/" );
 }
 
-
-
-BOOST_AUTO_TEST_CASE( TestINIAdapter )
+BOOST_AUTO_TEST_CASE( TestExt )
 {
-	com_ptr<IFileSystem> fs;
-	BOOST_CHECK(SF_SUCCEEDED(create_instance(fs.wrapped(), CLSID_CFileSystem, module)));
+	path p1("asdf/fdsa.ext");
+	BOOST_CHECK( strcmp(".ext", p1.extension()) == 0 );
 
-	com_ptr<IFile> pFile = fs->GetResource("../../test/filesystem.test/tests/testINI.ini");
-	BOOST_CHECK(pFile);
-
-	com_ptr<IINIFileAdapter> pINIAdapter;
-	BOOST_CHECK(SF_SUCCEEDED(fs->CreateFileAdapter(pFile, UUID_PPV(IINIFileAdapter, pINIAdapter.wrapped()))));
-	BOOST_CHECK(pINIAdapter);
-
-	BOOST_CHECK_EQUAL(pINIAdapter->IsInitialized(), false);
-	pINIAdapter->Parse();
-	BOOST_CHECK_EQUAL(pINIAdapter->IsInitialized(), true);
+	path p2("asdf/fdsaext");
+	BOOST_CHECK( strcmp("", p2.extension()) == 0 );
 }
 
-
-
-BOOST_AUTO_TEST_CASE( TestReadAll )
+BOOST_AUTO_TEST_CASE( TestAbs )
 {
-	com_ptr<IFileSystem> fs;
-	BOOST_CHECK(SF_SUCCEEDED(create_instance(fs.wrapped(), CLSID_CFileSystem, module)));
+	path p1 = path::current_dir();
+	path p2(".");
 
-	com_ptr<IFile> pFile = fs->GetResource("../../test/filesystem.test/tests/testXML.xml");
-	BOOST_CHECK(pFile);
+	BOOST_CHECK( !p2.is_absolute() );
+	p2.absolute();
+	BOOST_CHECK( p2.is_absolute() );
 
-	char *buf;
-	std::ios::streamoff size;
-	pFile->ReadFile(&buf, size);
-
-	BOOST_CHECK_NE((int)size, 0);
-
-	delete[] buf;
+	BOOST_CHECK_EQUAL(p1, p2);
 }
 
-BOOST_AUTO_TEST_CASE( TestArchives )
+BOOST_AUTO_TEST_CASE( TestRelPath )
 {
-	com_ptr<IFileSystem> fs;
-	BOOST_CHECK(SF_SUCCEEDED(create_instance(fs.wrapped(), CLSID_CFileSystem, module)));
+	path p1("/common/asdf/fdsa");
+	path p2("/common/fdsa/asdf");
+	
+	BOOST_CHECK_EQUAL(path::common_prefix(p1, p2), "/common");
 
-	com_ptr<IFile> stxt2 = fs->GetResource("../../test/filesystem.test/tests/test_arch.zip/sub/sub.txt", true);
-	BOOST_CHECK(stxt2);
+	path p3 = path::current_dir();
+	p3 += "asdf/fdsa";
+	p3.absolute();
+	p3.relative();
+	BOOST_CHECK_EQUAL(p3, "asdf/fdsa");
 
-	com_ptr<IResource> pRes = fs->GetResource("../../test/filesystem.test/tests/test_arch.zip");
-	BOOST_CHECK(pRes);
+	path p4 = path::current_dir();
+	p4 += "../asdf/fdsa";
+	p4.absolute();
+	p4.relative();
+	BOOST_CHECK_EQUAL(p4, "../asdf/fdsa");
+}
 
-	// Test interface map
-	com_ptr<IArchive> pArch = pRes;
+BOOST_AUTO_TEST_CASE( TestNormalization )
+{
+	path p("AbCd/teSt");
+	p.normcase();
+#if defined OS_WINDOWS
+	BOOST_CHECK(strcmp(p.c_str(), "abcd/test") == 0);
+#else
+	BOOST_CHECK(strcmp(p.c_str(), "AbCd/teSt") == 0);
+#endif
+
+	path p2("test//../../asdf/");
+	p2.normpath();
+	BOOST_CHECK_EQUAL(p2, "../asdf");
+
+	path p3("/test/..//asdf/");
+	p3.normpath();
+	BOOST_CHECK_EQUAL(p3, "/asdf");
+}
+
+BOOST_AUTO_TEST_CASE( TestFwdIterators )
+{
+	path p("/..//something/right_one.yep");
+	
+	const char sep[] = { *path::separators(), '\0' };
+
+	path::iterator it = p.begin();
+	BOOST_CHECK(strcmp(it.element(), sep) == 0);
+	BOOST_CHECK( it != p.end() );
+
+	BOOST_CHECK( ++it );
+	BOOST_CHECK(strcmp(it.element(), "..") == 0);
+
+	BOOST_CHECK( ++it );
+	BOOST_CHECK(strcmp(it.element(), "something") == 0);
+
+	BOOST_CHECK( ++it );
+	BOOST_CHECK(strcmp(it.element(), "right_one.yep") == 0);
+	BOOST_CHECK( it != p.end() );
+
+	BOOST_CHECK( ! ++it );
+	BOOST_CHECK(strcmp(it.element(), "") == 0);
+	BOOST_CHECK( it == p.end() );
+
+#if defined OS_WINDOWS
+	path p1("C:\\test\\");
+	
+	it = p1.begin();
+	BOOST_CHECK(strcmp(it.element(), "C:") == 0);
+
+	BOOST_CHECK( ++it );
+	BOOST_CHECK(strcmp(it.element(), "test") == 0);
+	
+	BOOST_CHECK( ! ++it );
+	BOOST_CHECK( it == p1.end() );
+#endif
+}
+
+BOOST_AUTO_TEST_CASE( TestRevIterators )
+{
+	path p("/../something//right_one.yep");
+
+	const char sep[] = { *path::separators(), '\0' };
+	
+	path::iterator it = p.end();
+	BOOST_CHECK(strcmp(it.element(), "") == 0);
+
+	BOOST_CHECK( --it );
+	BOOST_CHECK(strcmp(it.element(), "right_one.yep") == 0);
+
+	BOOST_CHECK( --it );
+	BOOST_CHECK(strcmp(it.element(), "something") == 0);
+
+	BOOST_CHECK( --it );
+	BOOST_CHECK(strcmp(it.element(), "..") == 0);
+	BOOST_CHECK( it != p.begin() );
+
+	BOOST_CHECK( --it );
+	BOOST_CHECK(strcmp(it.element(), sep) == 0);
+	BOOST_CHECK( it == p.begin() );
+}
+
+BOOST_AUTO_TEST_CASE( TestDirIterators )
+{
+	path p("../../test/filesystem.test/");
+
+	directory_iterator dir = p.list_dir();
+	
+	bool found = false;
+	while(dir)
 	{
-		com_ptr<IResourceContainer> pResCont = pRes;
-		com_ptr<IFile> pFile = pRes;
-		BOOST_CHECK(pRes); BOOST_CHECK(pResCont); BOOST_CHECK(pFile); BOOST_CHECK(pArch);
+		if(dir.current() == "tests")
+			found = true;
+		dir++; // post on purpose
 	}
 
-	// Navigation test
-	com_ptr<IFolder> sub = pArch->FindChild("sub");
-	BOOST_CHECK(sub);
-
-	com_ptr<IFile> stxt = sub->FindChild("sub.txt");
-	BOOST_CHECK(stxt);
-
-	// Unpack test
-	char *buf;
-	std::ios::streamoff size;
-	stxt->ReadFile(&buf, size);
-
-	BOOST_CHECK_NE((int)size, 0);
-
-	delete[] buf;
-
-	BOOST_CHECK_EQUAL(stxt, stxt2);
+	BOOST_CHECK(found);
 }
 
-BOOST_AUTO_TEST_CASE( testTravers )
+BOOST_AUTO_TEST_CASE( TestConvenience )
 {
-	class _testTraverser : public IFSTraverser
-	{
-		bool VisitFolder(IFolder* fld)
-		{
-			return true;
-		}
-		void LeaveFolder(IFolder* fld)
-		{
-		}
-		bool VisitArchive(IArchive* arch)
-		{
-			return true;
-		}
-		void LeaveArchive(IArchive* arch)
-		{
-		}
-		void VisitFile(IFile* file)
-		{
-		}
-	} tr;
-
-	com_ptr<IFileSystem> fs;
-	BOOST_CHECK(SF_SUCCEEDED(create_instance(fs.wrapped(), CLSID_CFileSystem, module)));
-
-	com_ptr<IResource> pRes = fs->GetResource("../../test/filesystem.test/tests");
-	BOOST_CHECK(pRes);
-
-	pRes->Accept(&tr);
+	path p1 = path::temp_dir();
+	path p2 = path::temp_file_name(p1, "sekai");
 }
 
 BOOST_AUTO_TEST_SUITE_END();
