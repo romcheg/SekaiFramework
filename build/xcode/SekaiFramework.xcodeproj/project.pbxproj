@@ -857,7 +857,7 @@
 					../../src,
 				);
 				INSTALL_PATH = /usr/local/bin;
-				OTHER_LDFLAGS = "-lboost_unit_test-mt";
+				OTHER_LDFLAGS = "-lboost_unit_test_framework-mt";
 				PREBINDING = NO;
 				PRODUCT_NAME = reflection.test;
 			};
@@ -881,7 +881,7 @@
 					../../src,
 				);
 				INSTALL_PATH = /usr/local/bin;
-				OTHER_LDFLAGS = "-lboost_unit_test-mt";
+				OTHER_LDFLAGS = "-lboost_unit_test_framework-mt";
 				PREBINDING = NO;
 				PRODUCT_NAME = reflection.test;
 				ZERO_LINK = NO;
